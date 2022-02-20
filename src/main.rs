@@ -1,33 +1,24 @@
 use std::env;
 use std::io;
 use std::fs::File;
-use std::io::{Error, Read};
+use std::io::{Read};
 
-fn read_one_byte(mut fs: File) -> Result<Option<u8>, std::io::Error> {
+fn read_one_byte(mut fs: File) -> io::Result<Option<u8>> {
     let mut buf : Vec<u8> = vec![0; 1];
 
-    let bytes_read = fs.read(&mut buf)?;
-
-    if bytes_read > 0 {
-        Ok(Some(buf[0]))
-    }
-    else {
-        Ok(None)
+    match fs.read(&mut buf)? {
+        0 => Ok( None ),
+        _ => Ok( Some(buf[0]) )
     }
 }
 
 fn run(filename : &str) -> Result<(), std::io::Error> {
-    let mut fs = File::open(filename )?;
+    let fs = File::open(filename )?;
     match read_one_byte(fs)? {
-        None => {
-            println!("EOF");
-            Ok(())
-        },
-        Some(byte) => {
-            println!("1st byte: {:#02X}", byte);
-            Ok(())
-        }
+        None           => println!("EOF"),
+        Some(byte) => println!("1st byte: {:#02X}", byte)
     }
+    Ok(())
 }
 
 fn main() {
