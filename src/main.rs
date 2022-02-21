@@ -149,10 +149,10 @@ fn print_find_buffer(buf : *const u8, buf_len : usize ) {
 
     eprintln!("buf_len: {}", buf_len);
 
-    let mut info : &FILE_DIRECTORY_INFORMATION = unsafe { &*(buf as *const FILE_DIRECTORY_INFORMATION) };
+    let mut info_ptr = buf as *const FILE_DIRECTORY_INFORMATION;
 
     loop  {
-
+        let info : &FILE_DIRECTORY_INFORMATION = unsafe { &*info_ptr };
         let name = info.filename_wide();
 
         println!("[{}]", name.display());
@@ -160,10 +160,7 @@ fn print_find_buffer(buf : *const u8, buf_len : usize ) {
         if info.NextEntryOffset == 0 {
             break;
         } else {
-            info = unsafe {
-                &*((info as *const FILE_DIRECTORY_INFORMATION as *const u8).add(info.NextEntryOffset as usize ) as *const FILE_DIRECTORY_INFORMATION)
-            };
-
+            info_ptr = unsafe { (info_ptr as *const u8).add( (*info_ptr).NextEntryOffset as usize) as *const FILE_DIRECTORY_INFORMATION };
         }
     }
 }
