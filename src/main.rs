@@ -145,14 +145,14 @@ impl FILE_DIRECTORY_INFORMATION {
     }
 }
 
-fn print_find_buffer(buf : &Vec<u8>, buf_len : usize ) {
-
-    let mut byte_ptr :*const u8 = &(buf[0]);
+fn print_find_buffer(buf : *const u8, buf_len : usize ) {
 
     eprintln!("buf_len: {}", buf_len);
 
+    let mut info : &FILE_DIRECTORY_INFORMATION = unsafe { &*(buf as *const FILE_DIRECTORY_INFORMATION) };
+
     loop  {
-        let info : &FILE_DIRECTORY_INFORMATION = unsafe { &*(byte_ptr as *const FILE_DIRECTORY_INFORMATION) };
+
         let name = info.filename_wide();
 
         println!("[{}]", name.display());
@@ -160,7 +160,10 @@ fn print_find_buffer(buf : &Vec<u8>, buf_len : usize ) {
         if info.NextEntryOffset == 0 {
             break;
         } else {
-            byte_ptr = unsafe { byte_ptr.add(info.NextEntryOffset as usize) };
+            info = unsafe {
+                &*((info as *const FILE_DIRECTORY_INFORMATION as *const u8).add(info.NextEntryOffset as usize ) as *const FILE_DIRECTORY_INFORMATION)
+            };
+
         }
     }
 }
@@ -200,7 +203,7 @@ fn list_directory(directoryname : &str) -> std::io::Result<()> {
             break Err(std::io::Error::from_raw_os_error(ERROR_INSUFFICIENT_BUFFER.0 as i32));
         }
         else {
-            print_find_buffer(&buf, io_status_block.Information);
+            print_find_buffer(&(buf[0]), io_status_block.Information);
         }
     }
 }
