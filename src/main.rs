@@ -136,6 +136,15 @@ struct FILE_DIRECTORY_INFORMATION {
     FileName : [u16;1]
 }
 
+impl FILE_DIRECTORY_INFORMATION {
+    fn filename_wide(&self) -> &widestring::U16Str {
+        unsafe {
+            widestring::U16Str::from_ptr(
+                &(self.FileName[0]),
+                (self.FileNameLength as usize) / 2 ) }
+    }
+}
+
 fn print_find_buffer(buf : &Vec<u8>, buf_len : usize ) {
 
     let mut byte_ptr :*const u8 = &(buf[0]);
@@ -143,21 +152,15 @@ fn print_find_buffer(buf : &Vec<u8>, buf_len : usize ) {
     eprintln!("buf_len: {}", buf_len);
 
     loop  {
-        let info  = byte_ptr as *const FILE_DIRECTORY_INFORMATION;
-
-        let name = unsafe {
-            widestring::U16Str::from_ptr(
-                &((*info).FileName[0]),
-                ((*info).FileNameLength as usize) / 2 ) };
+        let info : &FILE_DIRECTORY_INFORMATION = unsafe { &*(byte_ptr as *const FILE_DIRECTORY_INFORMATION) };
+        let name = info.filename_wide();
 
         println!("[{}]", name.display());
 
-        unsafe {
-            if (*info).NextEntryOffset == 0 {
-                break;
-            } else {
-                byte_ptr = byte_ptr.add((*info).NextEntryOffset as usize);
-            }
+        if info.NextEntryOffset == 0 {
+            break;
+        } else {
+            byte_ptr = unsafe { byte_ptr.add(info.NextEntryOffset as usize) };
         }
     }
 }
