@@ -1,8 +1,8 @@
 use std::env;
 use std::ffi::c_void;
-use std::os::raw::{c_uint, c_ulong};
-use windows::Win32::Foundation::{BOOL, BOOLEAN, CloseHandle, ERROR_INSUFFICIENT_BUFFER, ERROR_NO_MORE_FILES, FILETIME, HANDLE, NTSTATUS, RtlNtStatusToDosError, STATUS_NO_MORE_FILES, STATUS_SUCCESS, UNICODE_STRING};
-use windows::Win32::Storage::FileSystem::{FILE_FLAG_BACKUP_SEMANTICS, FILE_GENERIC_READ, FILE_LIST_DIRECTORY, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING};
+use std::os::raw::{c_ulong};
+use windows::Win32::Foundation::{BOOL, BOOLEAN, CloseHandle, ERROR_INSUFFICIENT_BUFFER, HANDLE, NTSTATUS, RtlNtStatusToDosError, STATUS_NO_MORE_FILES, STATUS_SUCCESS, UNICODE_STRING};
+use windows::Win32::Storage::FileSystem::{FILE_FLAG_BACKUP_SEMANTICS, FILE_LIST_DIRECTORY, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING};
 use windows::Win32::System::WindowsProgramming::{FILE_INFORMATION_CLASS, FileDirectoryInformation, IO_STATUS_BLOCK, PIO_APC_ROUTINE};
 /*
 fn read_one_byte(mut fs: &File) -> io::Result<Option<u8>> {
@@ -64,20 +64,21 @@ __kernel_entry NTSYSCALLAPI NTSTATUS NtQueryDirectoryFile(
   [in]           BOOLEAN                RestartScan
 );
  */
+#[allow(non_snake_case)]
 #[link(name = "ntdll")]
 extern "stdcall" {
     fn NtQueryDirectoryFile(
-        FileHandle : HANDLE,
-        Event : HANDLE,
-        ApcRoutine : PIO_APC_ROUTINE,
-        ApcContext : *const c_void ,
-        IoStatusBlock : *mut IO_STATUS_BLOCK,
-        FileInformation : *mut c_void,
-        Length : c_ulong,
-        FileInformationClass : FILE_INFORMATION_CLASS,
-        ReturnSingleEntry : BOOLEAN,
-        FileName : *const UNICODE_STRING,
-        RestartScan : BOOLEAN ) -> NTSTATUS;
+        FileHandle              : HANDLE,
+        Event                   : HANDLE,
+        ApcRoutine              : PIO_APC_ROUTINE,
+        ApcContext              : *const c_void ,
+        IoStatusBlock           : *mut IO_STATUS_BLOCK,
+        FileInformation         : *mut c_void,
+        Length                  : c_ulong,
+        FileInformationClass    : FILE_INFORMATION_CLASS,
+        ReturnSingleEntry       : BOOLEAN,
+        FileName                : *const UNICODE_STRING,
+        RestartScan             : BOOLEAN ) -> NTSTATUS;
 }
 
 fn win32_open_file(filename : &str) -> std::io::Result<SafeWin32Handle> {
@@ -119,6 +120,7 @@ typedef struct _FILE_DIRECTORY_INFORMATION {
 */
 
 #[allow(non_snake_case)]
+#[allow(non_camel_case_types)]
 #[repr(C)]
 struct FILE_DIRECTORY_INFORMATION {
     NextEntryOffset : c_ulong,
@@ -212,7 +214,7 @@ fn main() {
                 eprintln!("{} [{}]", e, directory_name);
                 e.raw_os_error().unwrap()
             },
-            Ok(h) => {
+            Ok(_) => {
                 0
             }
         }
