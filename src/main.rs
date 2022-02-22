@@ -2,9 +2,12 @@ mod privilege;
 
 use std::env;
 use std::ffi::c_void;
+use std::fmt::Debug;
 use std::os::raw::{c_ulong};
-use windows::Win32::Foundation::{BOOL, BOOLEAN, CloseHandle, ERROR_INSUFFICIENT_BUFFER, HANDLE, INVALID_HANDLE_VALUE, NTSTATUS, RtlNtStatusToDosError, STATUS_NO_MORE_FILES, STATUS_SUCCESS, UNICODE_STRING};
-use windows::Win32::Storage::FileSystem::{FILE_FLAG_BACKUP_SEMANTICS, FILE_LIST_DIRECTORY, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING};
+use std::fmt::Write;
+
+use windows::Win32::Foundation::{BOOLEAN, CloseHandle, ERROR_INSUFFICIENT_BUFFER, HANDLE, INVALID_HANDLE_VALUE, NTSTATUS, RtlNtStatusToDosError, STATUS_NO_MORE_FILES, STATUS_SUCCESS, UNICODE_STRING};
+use windows::Win32::Storage::FileSystem::{FILE_ATTRIBUTE_DIRECTORY, FILE_FLAG_BACKUP_SEMANTICS, FILE_LIST_DIRECTORY, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING};
 use windows::Win32::System::WindowsProgramming::{FILE_INFORMATION_CLASS, FileDirectoryInformation, IO_STATUS_BLOCK, PIO_APC_ROUTINE};
 /*
 fn read_one_byte(mut fs: &File) -> io::Result<Option<u8>> {
@@ -33,12 +36,7 @@ struct SafeWin32Handle {
 impl Drop for SafeWin32Handle {
     fn drop(&mut self) {
         if ! self.handle.is_invalid() {
-            let rc : BOOL;
-            unsafe { rc = CloseHandle(self.handle); }
-            if rc.as_bool() {
-                eprintln!("handle closed");
-            }
-            else {
+            if ! unsafe { CloseHandle(self.handle) }.as_bool() {
                 eprintln!("{} CloseHandle", std::io::Error::last_os_error());
             }
         }
@@ -153,7 +151,29 @@ impl FILE_DIRECTORY_INFORMATION {
     }
 }
 
-fn print_find_buffer(buf : *const u8, buf_len : usize ) {
+static WINDOWS_UCS2_DOT : u16 = 0x002E;
+
+fn is_dot_or_dotdot(fileattributes : c_ulong, filename : &[u16]) -> bool {
+
+    //let windows_dot : Vec<u16> = ".".encode_utf16().collect();
+
+    if (fileattributes & FILE_ATTRIBUTE_DIRECTORY.0 ) == 0 { false }
+    else if filename[0] != WINDOWS_UCS2_DOT { false }
+    else if filename.len() == 1             { true  }
+    else if filename[1] != WINDOWS_UCS2_DOT { false }
+    else if filename.len() == 2             { true  }
+    else                                    { false }
+
+}
+
+fn print_file_entry(find_data : &FILE_DIRECTORY_INFORMATION, filename : &[u16], print_buf : &mut String ) {
+    let filename_w = widestring::U16Str::from_slice(filename);
+
+    write!(print_buf, "{:>12}\t{}", find_data.EndOfFile, filename_w.display());
+
+}
+
+fn print_find_buffer(buf : *const u8, buf_len : usize, print_buf : &mut String ) {
 
     eprintln!("buf_len: {}", buf_len);
 
@@ -163,7 +183,13 @@ fn print_find_buffer(buf : *const u8, buf_len : usize ) {
         let info : &FILE_DIRECTORY_INFORMATION = unsafe { &*info_ptr };
         let name = info.filename_wide();
 
-        println!("[{}]", name.display());
+        let filename = unsafe { std::slice::from_raw_parts(&info.FileName[0] as *const u16, (info.FileNameLength / 2) as usize) };
+
+        if ! is_dot_or_dotdot(info.FileAttributes, filename) {
+            print_buf.clear();
+            print_file_entry(info, filename, print_buf);
+            println!("{}", print_buf);
+        }
 
         if info.NextEntryOffset == 0 {
             break;
@@ -178,8 +204,9 @@ fn list_directory(directoryname : &str) -> std::io::Result<()> {
     let directory_handle = win32_open_file(directoryname)?;
 
     let mut io_status_block : IO_STATUS_BLOCK = IO_STATUS_BLOCK::default();
-    const BUFFERSIZE : usize = 64*1024;
+    const BUFFERSIZE : usize = 64 * 1024;
     let buf: Vec<u8> = vec![0u8;BUFFERSIZE];
+    let mut print_buf = String::new();
 
     loop {
         let status: NTSTATUS = unsafe {
@@ -208,7 +235,7 @@ fn list_directory(directoryname : &str) -> std::io::Result<()> {
             break Err(std::io::Error::from_raw_os_error(ERROR_INSUFFICIENT_BUFFER.0 as i32));
         }
         else {
-            print_find_buffer(&(buf[0]), io_status_block.Information);
+            print_find_buffer(&(buf[0]), io_status_block.Information, &mut print_buf);
         }
     }
 }
