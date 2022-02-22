@@ -1,9 +1,9 @@
-mod try_set_privilege;
+mod privilege;
 
 use std::env;
 use std::ffi::c_void;
 use std::os::raw::{c_ulong};
-use windows::Win32::Foundation::{BOOL, BOOLEAN, CloseHandle, ERROR_INSUFFICIENT_BUFFER, HANDLE, NTSTATUS, RtlNtStatusToDosError, STATUS_NO_MORE_FILES, STATUS_SUCCESS, UNICODE_STRING};
+use windows::Win32::Foundation::{BOOL, BOOLEAN, CloseHandle, ERROR_INSUFFICIENT_BUFFER, HANDLE, INVALID_HANDLE_VALUE, NTSTATUS, RtlNtStatusToDosError, STATUS_NO_MORE_FILES, STATUS_SUCCESS, UNICODE_STRING};
 use windows::Win32::Storage::FileSystem::{FILE_FLAG_BACKUP_SEMANTICS, FILE_LIST_DIRECTORY, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING};
 use windows::Win32::System::WindowsProgramming::{FILE_INFORMATION_CLASS, FileDirectoryInformation, IO_STATUS_BLOCK, PIO_APC_ROUTINE};
 /*
@@ -36,12 +36,18 @@ impl Drop for SafeWin32Handle {
             let rc : BOOL;
             unsafe { rc = CloseHandle(self.handle); }
             if rc.as_bool() {
-                println!("handle closed");
+                eprintln!("handle closed");
             }
             else {
                 eprintln!("{} CloseHandle", std::io::Error::last_os_error());
             }
         }
+    }
+}
+
+impl Default for SafeWin32Handle {
+    fn default() -> Self {
+        SafeWin32Handle::new(INVALID_HANDLE_VALUE)
     }
 }
 
@@ -213,6 +219,11 @@ fn main() {
         2
     }
     else {
+        match privilege::try_enable_backup_privilege() {
+            Err(e) => println!("{}", e),
+            _ => ()
+        }
+
         let directory_name = args[1].as_str();
         match list_directory(directory_name) {
             Err(e) => {
