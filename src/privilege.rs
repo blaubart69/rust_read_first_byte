@@ -1,6 +1,6 @@
 use windows::Win32::Security::{AdjustTokenPrivileges, LookupPrivilegeValueW, SE_PRIVILEGE_ENABLED, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY};
 use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-use windows::Win32::Foundation::{BOOL, ERROR_NOT_ALL_ASSIGNED, GetLastError, HANDLE, PWSTR};
+use windows::Win32::Foundation::{BOOL, CloseHandle, ERROR_NOT_ALL_ASSIGNED, GetLastError, HANDLE, PWSTR};
 use windows::Win32::System::SystemServices::SE_BACKUP_NAME;
 
 pub fn try_enable_backup_privilege() -> std::io::Result<()> {
@@ -9,13 +9,13 @@ pub fn try_enable_backup_privilege() -> std::io::Result<()> {
     tp.PrivilegeCount = 1;
     tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
 
-    let mut h_token = super::SafeWin32Handle::default();
+    let mut h_token = HANDLE::default();
 
-    unsafe {
+    let rc = unsafe {
         if ! OpenProcessToken(
             GetCurrentProcess(),
             TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES,
-            &mut h_token.handle as *mut HANDLE).as_bool() {
+            &mut h_token).as_bool() {
                 Err(std::io::Error::last_os_error())
         }
         else if ! LookupPrivilegeValueW(
@@ -25,7 +25,7 @@ pub fn try_enable_backup_privilege() -> std::io::Result<()> {
             Err(std::io::Error::last_os_error())
         }
         else if  ! AdjustTokenPrivileges(
-            h_token.handle,
+            h_token,
             BOOL::from(false),
             &tp as *const _,
             std::mem::size_of::<TOKEN_PRIVILEGES>() as u32,
@@ -39,5 +39,12 @@ pub fn try_enable_backup_privilege() -> std::io::Result<()> {
         else {
             Ok(())
         }
+    };
+
+    if ! h_token.is_invalid() {
+        unsafe { CloseHandle(h_token); }
     }
+
+    rc
+
 }
