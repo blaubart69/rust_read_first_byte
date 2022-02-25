@@ -1,9 +1,10 @@
 use std::ffi::c_void;
 use std::os::raw::c_ulong;
 use std::fmt::Write;
+use std::fs::File;
 
 
-use std::os::windows::io::{RawHandle, FromRawHandle, AsRawHandle};
+use std::os::windows::io::{FromRawHandle, AsRawHandle};
 use std::io::prelude::*;
 use std::os::windows::fs::OpenOptionsExt;
 
@@ -97,18 +98,18 @@ typedef struct _FILE_DIRECTORY_INFORMATION {
 #[allow(non_snake_case)]
 #[allow(non_camel_case_types)]
 #[repr(C)]
-struct FILE_DIRECTORY_INFORMATION {
-    NextEntryOffset : c_ulong,
-    FileIndex : c_ulong,
-    CreationTime : i64,
-    LastAccessTime : i64,
-    LastWriteTime :i64,
-    ChangeTime : i64,
-    EndOfFile : u64,
-    AllocationSize : u64,
-    FileAttributes : c_ulong,
-    FileNameLength : c_ulong,
-    FileName : [u16;1]
+pub struct FILE_DIRECTORY_INFORMATION {
+    pub NextEntryOffset : c_ulong,
+    pub FileIndex : c_ulong,
+    pub CreationTime : i64,
+    pub LastAccessTime : i64,
+    pub LastWriteTime :i64,
+    pub ChangeTime : i64,
+    pub EndOfFile : u64,
+    pub AllocationSize : u64,
+    pub FileAttributes : c_ulong,
+    pub FileNameLength : c_ulong,
+    pub FileName : [u16;1]
 }
 
 impl FILE_DIRECTORY_INFORMATION {
@@ -118,13 +119,18 @@ impl FILE_DIRECTORY_INFORMATION {
                 &(self.FileName[0]),
                 (self.FileNameLength as usize) / 2 ) }
     }
+    fn filename_as_slice(&self) -> &[u16] {
+        unsafe {
+            std::slice::from_raw_parts(
+                &self.FileName[0] as *const u16,
+                (self.FileNameLength / 2) as usize)
+        }
+    }
 }
-
-static WINDOWS_UCS2_DOT : u16 = 0x002E;
 
 fn is_dot_or_dotdot(fileattributes : c_ulong, filename : &[u16]) -> bool {
 
-    //let windows_dot : Vec<u16> = ".".encode_utf16().collect();
+    static WINDOWS_UCS2_DOT : u16 = 0x002E;
 
     if (fileattributes & FILE_ATTRIBUTE_DIRECTORY.0 ) == 0 { false }
     else if filename[0] != WINDOWS_UCS2_DOT { false }
@@ -135,30 +141,18 @@ fn is_dot_or_dotdot(fileattributes : c_ulong, filename : &[u16]) -> bool {
 
 }
 
-fn print_file_entry(find_data : &FILE_DIRECTORY_INFORMATION, filename : &[u16], print_buf : &mut String ) {
-    let filename_w = widestring::U16Str::from_slice(filename);
-
-    write!(print_buf, "{:>12}\t{}", find_data.EndOfFile, filename_w.display());
-
-}
-
-fn print_find_buffer(buf : *const u8, buf_len : usize, print_buf : &mut String ) {
-
-    eprintln!("buf_len: {}", buf_len);
+fn enumerate_find_buffer<F>(buf : *const u8, buf_len : usize, mut on_entry : F )
+where F: FnMut(&FILE_DIRECTORY_INFORMATION, &[u16]) {
 
     let mut info_ptr = buf as *const FILE_DIRECTORY_INFORMATION;
 
     loop  {
         let info : &FILE_DIRECTORY_INFORMATION = unsafe { &*info_ptr };
-        let name = info.filename_wide();
 
-        let filename = unsafe { std::slice::from_raw_parts(&info.FileName[0] as *const u16, (info.FileNameLength / 2) as usize) };
-
-        if ! is_dot_or_dotdot(info.FileAttributes, filename) {
-            print_buf.clear();
-            print_file_entry(info, filename, print_buf);
-            println!("{}", print_buf);
-        }
+            let filename_slice = info.filename_as_slice();
+            if ! is_dot_or_dotdot(info.FileAttributes, filename_slice) {
+                on_entry(info, filename_slice);
+            }
 
         if info.NextEntryOffset == 0 {
             break;
@@ -168,12 +162,10 @@ fn print_find_buffer(buf : *const u8, buf_len : usize, print_buf : &mut String )
     }
 }
 
-pub fn list_directory(directory : &std::fs::File) -> std::io::Result<()> {
+pub fn enumerate_directory<F>(directory : &std::fs::File, buf: &mut Vec<u8>, mut on_entry : F ) -> std::io::Result<()>
+    where F: FnMut(&FILE_DIRECTORY_INFORMATION, &[u16]) {
 
     let mut io_status_block : IO_STATUS_BLOCK = IO_STATUS_BLOCK::default();
-    const BUFFERSIZE : usize = 64 * 1024;
-    let buf: Vec<u8> = vec![0u8;BUFFERSIZE];
-    let mut print_buf = String::new();
 
     loop {
         let win_handle  =
@@ -187,7 +179,7 @@ pub fn list_directory(directory : &std::fs::File) -> std::io::Result<()> {
                 , std::ptr::null()      // APC context
                 , &mut io_status_block
                 , std::mem::transmute(&(buf[0]) )
-                , BUFFERSIZE as c_ulong
+                , buf.len() as c_ulong
                 , FileDirectoryInformation
                 , BOOLEAN(0)      // ReturnSingleEntry
                 , std::ptr::null()    // Filename
@@ -199,13 +191,13 @@ pub fn list_directory(directory : &std::fs::File) -> std::io::Result<()> {
         }
         else if status != STATUS_SUCCESS {
             //break Err( unsafe { RtlNtStatusToDosError(status) } )
-            break Err(std::io::Error::from_raw_os_error((unsafe { RtlNtStatusToDosError(status) } as i32) ));
+            break Err(std::io::Error::from_raw_os_error(unsafe { RtlNtStatusToDosError(status) } as i32 ));
         }
         else if io_status_block.Information == 0 {
             break Err(std::io::Error::from_raw_os_error(ERROR_INSUFFICIENT_BUFFER.0 as i32));
         }
         else {
-            print_find_buffer(&(buf[0]), io_status_block.Information, &mut print_buf);
+            enumerate_find_buffer(&(buf[0]), io_status_block.Information, &mut on_entry);
         }
     }
 }

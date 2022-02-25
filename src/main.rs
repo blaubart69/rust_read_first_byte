@@ -1,15 +1,28 @@
 use std::env;
 use std::fs::File;
-use std::ffi::c_void;
 use std::fmt::Debug;
 
 mod privilege;
 mod nt;
 
+use nt::FILE_DIRECTORY_INFORMATION;
+
+fn print_file_entry(find_data : &FILE_DIRECTORY_INFORMATION, filename : &[u16] ) {
+    let filename_w = widestring::U16Str::from_slice(filename);
+
+    println!("{:>12}\t{}", find_data.EndOfFile, filename_w.display());
+
+}
+
 fn run (directory_name : &str) -> std::io::Result<()> {
     let directory = nt::open_directory(directory_name)?;
-    nt::list_directory(&directory)?;
-    Ok(())
+    let mut buf: Vec<u8> = vec![0u8;64*1024];
+    nt::enumerate_directory(
+        &directory,
+        &mut buf,
+        | find_data : &nt::FILE_DIRECTORY_INFORMATION, filename : &[u16] | {
+            print_file_entry(find_data, filename);
+        } )
 }
 
 fn main() {
