@@ -113,12 +113,6 @@ pub struct FILE_DIRECTORY_INFORMATION {
 }
 
 impl FILE_DIRECTORY_INFORMATION {
-    fn filename_wide(&self) -> &widestring::U16Str {
-        unsafe {
-            widestring::U16Str::from_ptr(
-                &(self.FileName[0]),
-                (self.FileNameLength as usize) / 2 ) }
-    }
     fn filename_as_slice(&self) -> &[u16] {
         unsafe {
             std::slice::from_raw_parts(

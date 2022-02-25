@@ -1,9 +1,12 @@
+extern crate core;
+
 use std::env;
 use std::fs::File;
 use std::fmt::Debug;
 
 mod privilege;
 mod nt;
+mod iocp_concurrent_queue;
 
 use nt::FILE_DIRECTORY_INFORMATION;
 
