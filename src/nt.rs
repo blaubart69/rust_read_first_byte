@@ -135,7 +135,7 @@ fn is_dot_or_dotdot(fileattributes : c_ulong, filename : &[u16]) -> bool {
 
 }
 
-fn enumerate_find_buffer<F>(buf : *const u8, buf_len : usize, mut on_entry : F )
+fn enumerate_find_buffer<F>(buf : *const u8, _buf_len : usize, mut on_entry : F )
 where F: FnMut(&FILE_DIRECTORY_INFORMATION, &[u16]) {
 
     let mut info_ptr = buf as *const FILE_DIRECTORY_INFORMATION;
