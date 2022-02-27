@@ -8,7 +8,7 @@ use std::os::windows::io::{FromRawHandle, AsRawHandle};
 use std::io::prelude::*;
 use std::os::windows::fs::OpenOptionsExt;
 
-use windows::Win32::Foundation::{BOOLEAN, CloseHandle, ERROR_INSUFFICIENT_BUFFER, HANDLE, INVALID_HANDLE_VALUE, NTSTATUS, RtlNtStatusToDosError, STATUS_NO_MORE_FILES, STATUS_SUCCESS, UNICODE_STRING};
+use windows::Win32::Foundation::{BOOLEAN, CloseHandle, ERROR_INSUFFICIENT_BUFFER, FILETIME, HANDLE, INVALID_HANDLE_VALUE, NTSTATUS, RtlNtStatusToDosError, STATUS_NO_MORE_FILES, STATUS_SUCCESS, UNICODE_STRING};
 use windows::Win32::System::WindowsProgramming::{FILE_INFORMATION_CLASS, FileDirectoryInformation, IO_STATUS_BLOCK, PIO_APC_ROUTINE};
 use windows::Win32::Storage::FileSystem::{FILE_ATTRIBUTE_DIRECTORY, FILE_FLAG_BACKUP_SEMANTICS, FILE_LIST_DIRECTORY, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING};
 
@@ -101,10 +101,10 @@ typedef struct _FILE_DIRECTORY_INFORMATION {
 pub struct FILE_DIRECTORY_INFORMATION {
     pub NextEntryOffset : c_ulong,
     pub FileIndex : c_ulong,
-    pub CreationTime : i64,
-    pub LastAccessTime : i64,
-    pub LastWriteTime :i64,
-    pub ChangeTime : i64,
+    pub CreationTime : FILETIME,
+    pub LastAccessTime : FILETIME,
+    pub LastWriteTime : FILETIME,
+    pub ChangeTime : FILETIME,
     pub EndOfFile : u64,
     pub AllocationSize : u64,
     pub FileAttributes : c_ulong,
